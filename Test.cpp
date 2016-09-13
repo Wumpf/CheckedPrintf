@@ -1,4 +1,5 @@
 #include "CheckedPrintf.h"
+#include <string>
 
 int main()
 {
@@ -50,4 +51,12 @@ int main()
   // Some larger expressions.
   printf_checked("Hello %s %i some text after %%", "test", 10);
   printf_checked("A float %f a double scientific %e, an integer %i and another %i. And a silly string between %s", f, d, i, ui, string);
+
+
+  // Non-compile time format string (should be left unchecked)
+  std::string formatString = "asdf %s";
+  formatString += "blub %i";
+  const char* formatCSTring = formatString.c_str();
+  printf_checked(formatCSTring, string, i);
+  //printf_checked(formatString.c_str(), string, i); // Doesn't work yet. Solutions?
 }

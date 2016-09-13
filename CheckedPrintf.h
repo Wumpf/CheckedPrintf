@@ -125,7 +125,7 @@ namespace CheckedPrintf
              // Width & precision
              (format[pos] >= '0' && format[pos] <= '9') || format[pos] == '.' || format[pos] == '*' 
                // Then skip this letter.
-               ? ParseSymbol<FormatLen, Param0, Param...>(format, pos+1) :
+               ? ParseSymbol<FormatLen, Param0, Param...>(format, pos + 1) :
 
              // Nothing we know!
              throw ErrorCode::INVALID_FORMATSTRING;
@@ -174,12 +174,19 @@ namespace CheckedPrintf
     }
   }
 
-  // Helper to start checking with parameters.
+
+  // Fallback for non-compile time string. (doesn't do anything!)
+  template<typename ...Param>
+  constexpr ErrorCode CheckPrintfFormat(const char*& format, int pos, const Param&... params)
+  {
+    return ErrorCode::SUCCESS;
+  }
+
   // Parameters are not actually passed further, they just fill up the variadic parameter pack automatically.
-  template<typename int FormatLen, typename ...Param>
+  template<int FormatLen, typename ...Param>
   constexpr ErrorCode CheckPrintfFormat(const char(&format)[FormatLen], int pos, const Param&... params)
   {
-    return Details::CheckPrintfFormat<FormatLen, Param...>(format, pos);
+     return Details::CheckPrintfFormat<FormatLen, Param...>(format, pos);
   }
 }
 
