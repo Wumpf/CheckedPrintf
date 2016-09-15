@@ -1,5 +1,8 @@
 #include "CheckedPrintf.h"
 #include <string>
+#include <iostream>
+
+#define printf_checked(format, ...) CHECKED_FORMATSTRING(printf, format, ##__VA_ARGS__)
 
 int main()
 {
