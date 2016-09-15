@@ -54,11 +54,10 @@ int main()
   printf_checked("A float %f a double scientific %e, an integer %i and another %i. And a silly string between %s", f, d, i, ui, string);
 
 
-  // TODO: None of this works now.
   // Non-compile time format string (should be left unchecked)
-  //std::string formatString = "asdf %s";
-  //formatString += "blub %i";
-  //const char* formatCSTring = formatString.c_str();
-  //printf_checked(formatCSTring, string, i);
-  //printf_checked(formatString.c_str(), string, i); // Doesn't work yet. Solutions?
+  std::string formatString = "asdf %s";
+  formatString += "blub %i";
+  const char* formatCSTring = formatString.c_str();
+  printf_checked(formatCSTring, string, i);
+ // printf_checked(formatString.c_str(), string, i);  // Doesn't work since this would put a non-const expresion in a static_assert
 }

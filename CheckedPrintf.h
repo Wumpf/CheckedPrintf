@@ -218,18 +218,19 @@ namespace CheckedPrintf
     };
   }
 
-  //// Fallback for non-compile time string. (doesn't do anything!)
-  //template<typename ...Param>
-  //constexpr ErrorCode CheckPrintfFormat(const char*& format, int pos, const Param&... params)
-  //{
-  //  return ErrorCode::SUCCESS;
-  //}
+
+  // Fallback for non-compile time string. (doesn't do anything!)
+  template<typename ...Param>
+  constexpr ErrorCode CheckPrintfFormat(const char*& format, int pos, const Param&... params)
+  {
+    return ErrorCode::SUCCESS;
+  }
 
   // Parameters are not actually passed further, they just fill up the variadic parameter pack automatically.
   template<int FormatLen, typename ...Param>
   constexpr ErrorCode CheckPrintfFormat(const char(&format)[FormatLen], int pos, const Param&... params)
   {
-     return Details::CheckPrintfFormat<FormatLen, Param...>::Recurse(format, pos);
+    return Details::CheckPrintfFormat<FormatLen, Param...>::Recurse(format, pos);
   }
 }
 
@@ -244,6 +245,7 @@ namespace CheckedPrintf
 
 // Note the use of "##__VA_ARGS__". The ## combined with varargs is a non-ISO extension that happens to work in MSVC, GCC and Clang.
 // It will eliminate the preceding comma if __VA_ARGS__ is empty.
-#define printf_checked(format, ...) \
-  static_assert(CheckedPrintf::CheckPrintfFormat(format, 0, ##__VA_ARGS__) == CheckedPrintf::ErrorCode::SUCCESS, "This should never happen."); \
-  printf(format, ##__VA_ARGS__);
+#define printf_checked(format, ...) do { \
+  static_assert(CheckedPrintf::CheckPrintfFormat((format), 0, ##__VA_ARGS__) == CheckedPrintf::ErrorCode::SUCCESS, "This should never happen."); \
+  printf((format), ##__VA_ARGS__); \
+  } while(false)
