@@ -242,6 +242,8 @@ namespace CheckedPrintf
 
 // "Front end"
 
+// Note the use of "##__VA_ARGS__". The ## combined with varargs is a non-ISO extension that happens to work in MSVC, GCC and Clang.
+// It will eliminate the preceding comma if __VA_ARGS__ is empty.
 #define printf_checked(format, ...) \
-  static_assert(CheckedPrintf::CheckPrintfFormat(format, 0, __VA_ARGS__) == CheckedPrintf::ErrorCode::SUCCESS, "This should never happen."); \
-  printf(format, __VA_ARGS__);
+  static_assert(CheckedPrintf::CheckPrintfFormat(format, 0, ##__VA_ARGS__) == CheckedPrintf::ErrorCode::SUCCESS, "This should never happen."); \
+  printf(format, ##__VA_ARGS__);

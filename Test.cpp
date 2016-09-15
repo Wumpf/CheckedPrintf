@@ -28,7 +28,7 @@ int main()
   printf_checked("%c", i);
   printf_checked("%s", string);
   printf_checked("%p", pointer);
-  //printf_checked("%%"); // TODO: This doesn't work in GCC and Clang
+  printf_checked("%%");
 
   // Basic test with literals
   printf_checked("%i", -1);
