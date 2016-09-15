@@ -12,6 +12,7 @@ namespace CheckedPrintf
     TOO_MANY_ARGS,
     WRONG_ARG,
     INVALID_FORMATSTRING,
+    UNREACHABLE_CODE
   };
 
   namespace Details
@@ -24,6 +25,14 @@ namespace CheckedPrintf
       INT,
       POINTER
     };
+
+    // Non-specialized structs.
+    template<int FormatLen, typename ...Params>
+    struct CheckPrintfFormat;
+    template<int FormatLen, typename ...Params>
+    struct ParseSymbol;
+    template<FormatType ExpectedFormat, int FormatLen, typename ...Params>
+    struct CheckArgument;
 
     // Matching parser result (FormatType) with types.
     namespace
@@ -38,8 +47,10 @@ namespace CheckedPrintf
       // A List of all success cases:
 
       template<> struct ParamCheck<char*, FormatType::STRING> { typedef std::true_type Result; };
+      template<> struct ParamCheck<const char*, FormatType::STRING> { typedef std::true_type Result; };
       //template<> struct ParamCheck<wchar_t*, FormatType::STRING> { typedef std::true_type Result; };
       template<int N> struct ParamCheck<char[N], FormatType::STRING> { typedef std::true_type Result; };
+      template<int N> struct ParamCheck<const char[N], FormatType::STRING> { typedef std::true_type Result; };
       //template<int N> struct ParamCheck<wchar_t[N], FormatType::STRING> { typedef std::true_type Result; };
 
       template<> struct ParamCheck<char, FormatType::INT> { typedef std::true_type Result; };
@@ -57,136 +68,168 @@ namespace CheckedPrintf
       template<typename Pointer> struct ParamCheck<Pointer*, FormatType::POINTER> { typedef std::true_type Result; };
     }
 
-    // "Eats" a paramter type and checks if it matches the expected format type.
-    // If yes, goes back to CheckPrintfFormat (with one parameter less).
-    template<FormatType ExpectedFormat, typename int FormatLen, typename Param0, typename ...Param>
-    constexpr ErrorCode CheckPrintfArgumentAndContinue(const char(&format)[FormatLen], int pos)
+    template<FormatType ExpectedFormat, int FormatLen, typename Param0, typename ...Param>
+    struct CheckArgument<ExpectedFormat, FormatLen, Param0, Param...>
     {
-      // --------------------------------------------------------------------------------------------------
-      // Compile time error in this function: One of your arguments does not match the format string!
-      // Check the value of the parameter "pos" to find out which format string was missmatched.
-      // --------------------------------------------------------------------------------------------------
+      // "Eats" a paramter type and checks if it matches the expected format type.
+      // If yes, goes back to CheckPrintfFormat (with one parameter less).
+      static constexpr ErrorCode CheckAndContinue(const char(&format)[FormatLen], int pos)
+      {
+        // --------------------------------------------------------------------------------------------------
+        // Compile time error in this function: One of your arguments does not match the format string!
+        // Check the value of the parameter "pos" to find out which format string was missmatched.
+        // --------------------------------------------------------------------------------------------------
 
-      // Removing const from param to keep number of ParamChecks a bit lower.
-      // If ParamCheck says it is valid, keep going but jump over %x (thus pos+2).
-      return ParamCheck<std::remove_cv<Param0>::type, ExpectedFormat>::Result::value ? CheckPrintfFormat<FormatLen, Param...>(format, pos + 1) : throw ErrorCode::WRONG_ARG;
-    }
+        // Removing const from param to keep number of ParamChecks a bit lower.
+        // If ParamCheck says it is valid, keep going but jump over %x (thus pos+2).
+        return ParamCheck<Param0, ExpectedFormat>::Result::value ?
+                  CheckPrintfFormat<FormatLen, Param...>::Recurse(format, pos + 1) : throw ErrorCode::WRONG_ARG;
+      }
 
-    // Similar to CheckPrintfArgumentAndContinue, but for the special case of something like "%*d" which requires an extra integer.
-    template<typename int FormatLen, typename Param0, typename ...Param>
-    constexpr  ErrorCode VariableWidthSpecialCase(const char(&format)[FormatLen], int pos)
+      // Similar to CheckArgument::CheckAndContinue, but for the special case of something like "%*d" which requires an extra integer.
+      static constexpr ErrorCode VariableWidthSpecialCase(const char(&format)[FormatLen], int pos)
+      {
+        // --------------------------------------------------------------------------------------------------
+        // Compile time error in this function: You put a %* in your format string and another integer was expected but not provided.
+        // --------------------------------------------------------------------------------------------------
+
+        return ParamCheck<Param0, FormatType::INT>::Result::value ?
+                  ParseSymbol<FormatLen, Param...>::Recurse(format, pos + 1) : throw ErrorCode::WRONG_ARG;
+      }
+    };
+    template<FormatType ExpectedFormat, int FormatLen>
+    struct CheckArgument<ExpectedFormat, FormatLen, void>
     {
-      // --------------------------------------------------------------------------------------------------
-      // Compile time error in this function: You put a %* in your format string and another integer was expected but not provided.
-      // --------------------------------------------------------------------------------------------------
+      static constexpr ErrorCode CheckAndContinue(const char(&format)[FormatLen], int pos)
+      {
+        throw ErrorCode::UNREACHABLE_CODE;
+        return ErrorCode::UNREACHABLE_CODE;
+      }
+      static constexpr ErrorCode VariableWidthSpecialCase(const char(&format)[FormatLen], int pos)
+      {
+        throw ErrorCode::UNREACHABLE_CODE;
+        return ErrorCode::UNREACHABLE_CODE;
+      }
+    };
 
-      return ParamCheck<std::remove_cv<Param0>::type, FormatType::INT>::Result::value ? ParseSymbol<FormatLen, Param...>(format, pos + 1) : throw ErrorCode::WRONG_ARG;
-    }
 
     // The symbol parsing engine. Invoked if there are still params and % was found (but without trailing %)
-    template<typename int FormatLen, typename Param0, typename ...Param>
-    constexpr ErrorCode ParseSymbol(const char(&format)[FormatLen], int pos)
+    template<int FormatLen, typename Param0, typename ...Param>
+    struct ParseSymbol<FormatLen, Param0, Param...>
     {
-      // --------------------------------------------------------------------------------------------------
-      // Compile time error in this function: Can't parse format string, unknown specifier.
-      // --------------------------------------------------------------------------------------------------
+      static constexpr ErrorCode Recurse(const char(&format)[FormatLen], int pos)
+      {
+        // --------------------------------------------------------------------------------------------------
+        // Compile time error in this function: Can't parse format string, unknown specifier.
+        //
+        // Or, less common: Too few arguments in case of using a variable width specifier.
+        // --------------------------------------------------------------------------------------------------
 
-      // See http://www.cplusplus.com/reference/cstdio/printf/
+        // See http://www.cplusplus.com/reference/cstdio/printf/
 
-      return format[pos] == 'i' || // Signed decimal integer
-             format[pos] == 'd' || // Signed decimal integer
-             format[pos] == 'o' || // Unsigned octal
-             format[pos] == 'x' || // Unsigned hexadecimal integer
-             format[pos] == 'X' || // Unsigned hexadecimal integer, uppper case
-             format[pos] == 'c' ?  // Character
-                CheckPrintfArgumentAndContinue<FormatType::INT, FormatLen, Param0, Param...>(format, pos) : 
+        return format[pos] == 'i' || // Signed decimal integer
+               format[pos] == 'd' || // Signed decimal integer
+               format[pos] == 'o' || // Unsigned octal
+               format[pos] == 'x' || // Unsigned hexadecimal integer
+               format[pos] == 'X' || // Unsigned hexadecimal integer, uppper case
+               format[pos] == 'c' ?  // Character
+                  CheckArgument<FormatType::INT, FormatLen, Param0, Param...>::CheckAndContinue(format, pos) :
 
-             format[pos] == 'f' || // Decimal floating point, lowercase
-             format[pos] == 'F' || // Decimal floating point, uppercase
-             format[pos] == 'e' || // Scientific notation (mantissa/exponent), lowercase
-             format[pos] == 'E' || // Scientific notation (mantissa/exponent), uppercase
-             format[pos] == 'a' || // Hexadecimal floating point, lowercase 
-             format[pos] == 'A' ?  // Hexadecimal floating point, uppercase
-                CheckPrintfArgumentAndContinue<FormatType::REAL, FormatLen, Param0, Param...>(format, pos) : 
+               format[pos] == 'f' || // Decimal floating point, lowercase
+               format[pos] == 'F' || // Decimal floating point, uppercase
+               format[pos] == 'e' || // Scientific notation (mantissa/exponent), lowercase
+               format[pos] == 'E' || // Scientific notation (mantissa/exponent), uppercase
+               format[pos] == 'a' || // Hexadecimal floating point, lowercase 
+               format[pos] == 'A' ?  // Hexadecimal floating point, uppercase
+                  CheckArgument<FormatType::REAL, FormatLen, Param0, Param...>::CheckAndContinue(format, pos) :
 
-             format[pos] == 's' ? CheckPrintfArgumentAndContinue<FormatType::STRING, FormatLen, Param0, Param...>(format, pos) : // String of characters
+               format[pos] == 's' ? CheckArgument<FormatType::STRING, FormatLen, Param0, Param...>::CheckAndContinue(format, pos) : // String of characters
 
-             format[pos] == 'p' ? CheckPrintfArgumentAndContinue<FormatType::POINTER, FormatLen, Param0, Param...>(format, pos) : // Pointer address
+               format[pos] == 'p' ? CheckArgument<FormatType::POINTER, FormatLen, Param0, Param...>::CheckAndContinue(format, pos) : // Pointer address
 
 
-             // There are various symboles that describe how stuff should be formatted which are always between '%' and the specifier.
+               // There are various symboles that describe how stuff should be formatted which are always between '%' and the specifier.
 
-             // The one special case is a single * character right after %.
-             // It means that a integer is required to give the width of the upcoming thing to print.
-             format[pos-1] == '%' && format[pos] == '*' ? VariableWidthSpecialCase<FormatLen, Param0, Param...>(format, pos) :
+               // The one special case is a single * character right after %.
+               // It means that a integer is required to give the width of the upcoming thing to print.
+               format[pos-1] == '%' && format[pos] == '*' ? CheckArgument<FormatType::INT, FormatLen, Param0, Param...>::VariableWidthSpecialCase(format, pos) :
 
-             // Format specifier
-             format[pos] == '-' || format[pos] == '+' || format[pos] == ' ' || format[pos] == '#' || format[pos] == '0' ||
-             // Width & precision
-             (format[pos] >= '0' && format[pos] <= '9') || format[pos] == '.' || format[pos] == '*' 
-               // Then skip this letter.
-               ? ParseSymbol<FormatLen, Param0, Param...>(format, pos + 1) :
+               // Format specifier
+               format[pos] == '-' || format[pos] == '+' || format[pos] == ' ' || format[pos] == '#' || format[pos] == '0' ||
+               // Width & precision
+               (format[pos] >= '0' && format[pos] <= '9') || format[pos] == '.' || format[pos] == '*' 
+                 // Then skip this letter.
+                 ? Recurse(format, pos + 1) :
 
-             // Nothing we know!
-             throw ErrorCode::INVALID_FORMATSTRING;
-    }
-
-    // Call to symbol parsing engine without paramters left is always an error.
-    // Need to provide this function to make VariableWidthSpecialCase compile.
-    template<typename int FormatLen>
-    constexpr ErrorCode ParseSymbol(const char(&format)[FormatLen], int pos)
+               // Nothing we know!
+               throw ErrorCode::INVALID_FORMATSTRING;
+      }
+    };
+    template<int FormatLen>
+    struct ParseSymbol<FormatLen>
     {
-      throw ErrorCode::TOO_FEW_ARGS;
-    }
+      static constexpr ErrorCode Recurse(const char(&format)[FormatLen], int pos)
+      {
+        throw ErrorCode::UNREACHABLE_CODE;
+        return ErrorCode::UNREACHABLE_CODE;
+      }
+    };
 
     // Entry if there are no parameters (can be end of variadic recursion)
-    template<typename int FormatLen>
-    constexpr ErrorCode CheckPrintfFormat(const char(&format)[FormatLen], int pos)
+    template<int FormatLen>
+    struct CheckPrintfFormat<FormatLen, void>
     {
-      // --------------------------------------------------------------------------------------------------
-      // Compile time error in this function: You didn't provide enough arguments!
-      // --------------------------------------------------------------------------------------------------
+      static constexpr ErrorCode Recurse(const char(&format)[FormatLen], int pos)
+      {
+        // --------------------------------------------------------------------------------------------------
+        // Compile time error in this function: You didn't provide enough arguments!
+        // --------------------------------------------------------------------------------------------------
 
-      // Check if we are at the end - if yes, success!
-      return pos + 1 >= FormatLen ? ErrorCode::SUCCESS :
-        // A new % would mean we have too many args... unless there is another one right after it.
-        format[pos] == '%' ?
-        format[pos + 1] == '%' ? CheckPrintfFormat(format, pos + 2) : throw ErrorCode::TOO_FEW_ARGS :
-        // Otherwise keep parsing (recurse)...
-        CheckPrintfFormat(format, pos + 1);
-    }
+        // Check if we are at the end - if yes, success!
+        return pos + 1 >= FormatLen ? ErrorCode::SUCCESS :
+          // A new % would mean we have too many args... unless there is another one right after it.
+          format[pos] == '%' ?
+          format[pos + 1] == '%' ? Recurse(format, pos + 2) : throw ErrorCode::TOO_FEW_ARGS :
+          // Otherwise keep parsing (recurse)...
+          Recurse(format, pos + 1);
+      }
+    };
 
     // Entry for parsing when there are (still) parameters.
-    template<typename int FormatLen, typename Param0, typename ...Param>
-    constexpr ErrorCode CheckPrintfFormat(const char(&format)[FormatLen], int pos)
+    template<int FormatLen, typename Param0, typename ...Param>
+    struct CheckPrintfFormat<FormatLen, Param0, Param...>
     {
-      // --------------------------------------------------------------------------------------------------
-      // Compile time error in this function: You passed too many arguments!
-      // --------------------------------------------------------------------------------------------------
+      static constexpr ErrorCode Recurse(const char(&format)[FormatLen], int pos)
+      {
+        // --------------------------------------------------------------------------------------------------
+        // Compile time error in this function: You passed too many arguments!
+        // --------------------------------------------------------------------------------------------------
 
-      // Check if we are at the end - if yes, too many args!
-      return pos + 1 >= FormatLen ? throw ErrorCode::TOO_MANY_ARGS :
-          format[pos] == '%' && format[pos + 1] != '%' ?      //	A % followed by another % character will write a single % to the stream.
-            // If there has been a %, do type checks.
-            ParseSymbol<FormatLen, Param0, Param...>(format, pos + 1) : // Signed decimal integer
-            // No arg symbol, check next char ...
-            CheckPrintfFormat<FormatLen, Param0, Param...>(format, pos + 1);
-    }
+        return // Check if we are at the end of the format string.
+               pos + 1 >= FormatLen ? throw ErrorCode::TOO_MANY_ARGS :
+            
+                 // A % followed by another % character will write a single % to the stream.
+                 format[pos] == '%' && format[pos + 1] != '%' ?      
+                 // If there has been a %, do type checks.
+                 ParseSymbol<FormatLen, Param0, Param...>::Recurse(format, pos + 1) : // Signed decimal integer
+               // No arg symbol, check next char ...
+               Recurse(format, pos + 1);
+      }
+    };
   }
 
-
-  // Fallback for non-compile time string. (doesn't do anything!)
-  template<typename ...Param>
-  constexpr ErrorCode CheckPrintfFormat(const char*& format, int pos, const Param&... params)
-  {
-    return ErrorCode::SUCCESS;
-  }
+  //// Fallback for non-compile time string. (doesn't do anything!)
+  //template<typename ...Param>
+  //constexpr ErrorCode CheckPrintfFormat(const char*& format, int pos, const Param&... params)
+  //{
+  //  return ErrorCode::SUCCESS;
+  //}
 
   // Parameters are not actually passed further, they just fill up the variadic parameter pack automatically.
   template<int FormatLen, typename ...Param>
   constexpr ErrorCode CheckPrintfFormat(const char(&format)[FormatLen], int pos, const Param&... params)
   {
-     return Details::CheckPrintfFormat<FormatLen, Param...>(format, pos);
+     return Details::CheckPrintfFormat<FormatLen, Param..., void>::Recurse(format, pos);
   }
 }
 
