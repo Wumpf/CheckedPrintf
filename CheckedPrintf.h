@@ -98,7 +98,7 @@ namespace CheckedPrintf
       }
     };
     template<FormatType ExpectedFormat, int FormatLen>
-    struct CheckArgument<ExpectedFormat, FormatLen, void>
+    struct CheckArgument<ExpectedFormat, FormatLen>
     {
       static constexpr ErrorCode CheckAndContinue(const char(&format)[FormatLen], int pos)
       {
@@ -177,7 +177,7 @@ namespace CheckedPrintf
 
     // Entry if there are no parameters (can be end of variadic recursion)
     template<int FormatLen>
-    struct CheckPrintfFormat<FormatLen, void>
+    struct CheckPrintfFormat<FormatLen>
     {
       static constexpr ErrorCode Recurse(const char(&format)[FormatLen], int pos)
       {
@@ -207,8 +207,8 @@ namespace CheckedPrintf
 
         return // Check if we are at the end of the format string.
                pos + 1 >= FormatLen ? throw ErrorCode::TOO_MANY_ARGS :
-            
-                 // A % followed by another % character will write a single % to the stream.
+
+               // A % followed by another % character will write a single % to the stream.
                  format[pos] == '%' && format[pos + 1] != '%' ?      
                  // If there has been a %, do type checks.
                  ParseSymbol<FormatLen, Param0, Param...>::Recurse(format, pos + 1) : // Signed decimal integer
@@ -229,7 +229,7 @@ namespace CheckedPrintf
   template<int FormatLen, typename ...Param>
   constexpr ErrorCode CheckPrintfFormat(const char(&format)[FormatLen], int pos, const Param&... params)
   {
-     return Details::CheckPrintfFormat<FormatLen, Param..., void>::Recurse(format, pos);
+     return Details::CheckPrintfFormat<FormatLen, Param...>::Recurse(format, pos);
   }
 }
 
