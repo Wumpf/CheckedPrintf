@@ -1,4 +1,4 @@
-#include "CheckedPrintf.h"
+#include "PrintfFormatCheck.h"
 #include <string>
 #include <iostream>
 
@@ -6,7 +6,6 @@
 
 int main()
 {
-
   float f = 1.0f;
   double d = 1.0;
   char c = 1;
@@ -48,6 +47,15 @@ int main()
   printf_checked("%c", 1);
   printf_checked("%s", "blub");
 
+  // Multiple arguments.
+  printf_checked("%i%f", i, f);
+
+  // Non-const expressions in args.
+  printf_checked("%i", i + 1);
+  printf_checked("%i", i + i);
+  printf_checked("%i%f", i + i, f + f);
+  printf_checked("%f%i", f, i);
+
   // Some formatting stuff.
   printf_checked("%.2f", 1.0f);
   printf_checked("%*d", ui, i);  // Special case for variable width formating.
@@ -62,5 +70,5 @@ int main()
   formatString += "blub %i";
   const char* formatCSTring = formatString.c_str();
   printf_checked(formatCSTring, string, i);
- // printf_checked(formatString.c_str(), string, i);  // Doesn't work since this would put a non-const expresion in a static_assert
+  //printf_checked(formatString.c_str(), string, i);  // Doesn't work since this would put a non-const expresion in a static_assert
 }
